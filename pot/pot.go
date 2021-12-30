@@ -8,15 +8,10 @@ import (
 )
 
 const (
-	MAX_PRODUCCIO = 10
-	cuaOs         = "EstatOs"
-	cuaAbelles    = "CuaAbelles"
-	menjant       = "Estic menjant"
-	dormint       = "He acabat de menjar"
-	potPle        = "El pot está ple!"
-	pot           = "Pot"
-	MAX_POT       = 3
-	MAX_MEL_POT   = 10
+	potPle      = "El pot está ple!"
+	cuaPot      = "Pot"
+	MAX_MEL_POT = 10
+	MAX_POT     = 3
 )
 
 func failOnError(err error, msg string) {
@@ -24,6 +19,7 @@ func failOnError(err error, msg string) {
 		log.Fatalf("%s: %s", msg, err)
 	}
 }
+
 func main() {
 	nivellMel := make(chan int)
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
@@ -35,12 +31,12 @@ func main() {
 	defer ch.Close()
 
 	q, err := ch.QueueDeclare(
-		pot,   // name
-		false, // durable
-		false, // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
+		cuaPot, // name
+		false,  // durable
+		false,  // delete when unused
+		false,  // exclusive
+		false,  // no-wait
+		nil,    // arguments
 	)
 	failOnError(err, "Failed to declare a queue")
 	for i := 0; i < MAX_POT; i++ {
@@ -57,7 +53,7 @@ func main() {
 		omplut := make(chan bool)
 		go func(omplut chan bool) {
 			for d := range msgs {
-				log.Printf("Received a message: %s", d.Body)
+				log.Printf("Una abella ha posat mel: %s", d.Body)
 				nivellMel <- (<-nivellMel + 1)
 				if <-nivellMel == MAX_MEL_POT {
 					omplut <- true
