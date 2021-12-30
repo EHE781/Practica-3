@@ -1,1 +1,0 @@
-for /L %%A in (1,1,5) do (senders.bat)
