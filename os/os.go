@@ -2,7 +2,9 @@ package main
 
 import (
 	amqp "amqp"
+	"fmt"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -15,6 +17,11 @@ const (
 	potPle        = "El pot está ple!"
 	cuaPot        = "Pot"
 	desperta      = "Ves a menjar"
+	avisAbella    = "DespertarOs"
+)
+
+var (
+	wait sync.WaitGroup
 )
 
 func failOnError(err error, msg string) {
@@ -23,23 +30,21 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func conectar() *amqp.Connection {
+func main() {
+	wait.Add(1)
+	forever := make(chan bool)
+	menjades := make(chan int)
 	//conexion con el servidor de RabbitMQ
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	connexio, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
-	defer conn.Close()
-	return conn
-}
+	defer connexio.Close()
 
-func menjarMel(conn *amqp.Connection, menjades chan int) {
-
-	//creacion de un canal
-	ch, err := conn.Channel()
+	//creación de un canal
+	avisarAbelles, err := connexio.Channel()
 	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
-
+	defer avisarAbelles.Close()
 	//envio de cosas
-	q, err := ch.QueueDeclare(
+	cuaEnviats, err := avisarAbelles.QueueDeclare(
 		cuaOs, // name
 		false, // durable
 		false, // delete when unused
@@ -47,60 +52,62 @@ func menjarMel(conn *amqp.Connection, menjades chan int) {
 		false, // no-wait
 		nil,   // arguments
 	)
+
+	rebreComunicat, err := connexio.Channel()
+	failOnError(err, "Failed to open a channel")
+	cuaMissatges, err := rebreComunicat.QueueDeclare(avisAbella, false, false, false, false, nil)
 	failOnError(err, "Failed to declare a queue")
+	comunicats, err := rebreComunicat.Consume(
+		cuaMissatges.Name, // queue
+		"",                // consumer
+		true,              // auto-ack
+		false,             // exclusive
+		false,             // no-local
+		false,             // no-wait
+		nil,               // args
+	)
+	failOnError(err, "Failed to consume")
 
-	iterar := false
-	for iterar {
-		msgs, err := ch.Consume(
-			q.Name, // queue
-			"",     // consumer
-			true,   // auto-ack
-			false,  // exclusive
-			false,  // no-local
-			false,  // no-wait
-			nil,    // args
-		)
-		failOnError(err, "Failed to consume")
-
-		for msg := range msgs {
+	go func() {
+		for msg := range comunicats {
 			if string(msg.Body) == desperta {
-				err = ch.Publish(
-					"",     // exchange
-					q.Name, // routing key
-					false,  // mandatory
-					false,  // immediate
+				err = avisarAbelles.Publish(
+					"",              // exchange
+					cuaEnviats.Name, // routing key
+					false,           // mandatory
+					false,           // immediate
 					amqp.Publishing{
 						ContentType: "text/plain",
 						Body:        []byte(menjant), //l'os envia que esta menjant a totes les abelles (escolten aquest canal)
 					})
 				failOnError(err, "Failed to publish a message")
-
-				menjades <- (<-menjades + 1)
-				time.Sleep(6 * time.Second) //menjar 6 segons la mel
-
-				err = ch.Publish(
-					"",     // exchange
-					q.Name, // routing key
-					false,  // mandatory
-					false,  // immediate
+				fmt.Println(menjant)
+				time.Sleep(time.Duration(6) * time.Second) //menjar 6 segons la mel
+				err = avisarAbelles.Publish(
+					"",              // exchange
+					cuaEnviats.Name, // routing key
+					false,           // mandatory
+					false,           // immediate
 					amqp.Publishing{
 						ContentType: "text/plain",
 						Body:        []byte(dormint), //l'os envia que esta menjant a totes les abelles (escolten aquest canal)
 					})
 				failOnError(err, "Failed to publish a message")
+				fmt.Println(dormint)
+				menjadesVal := <-menjades + 1
+				menjades <- menjadesVal
 			}
 		}
-	}
-}
+		wait.Done()
+	}()
+	wait.Wait()
 
-func main() {
-	menjades := make(chan int)
-	connexio := conectar()
-	go menjarMel(connexio, menjades)
 	go func() {
+		for <-menjades < 3 {
+		}
 		if <-menjades == 3 {
 			log.Printf("L'ós s'en va a hibernar")
-			defer connexio.Close()
 		}
 	}()
+	<-forever
 }

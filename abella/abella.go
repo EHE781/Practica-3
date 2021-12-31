@@ -1,22 +1,30 @@
 package main
 
 import (
+	amqp "amqp"
 	"fmt"
 	"log"
 	"os"
-
-	amqp "amqp"
+	"sync"
+	"time"
 )
 
 const (
-	MAX_PRODUCCIO = 10
-	cuaOs         = "EstatOs"
-	cuaAbelles    = "CuaAbelles"
-	menjant       = "Estic menjant"
-	dormint       = "He acabat de menjar"
-	potPle        = "El pot está ple!"
-	cuaPot        = "Pot"
-	desperta      = "Ves a menjar"
+	MAX_PRODUCCIO       = 10
+	cuaOs               = "EstatOs"
+	cuaAbelles          = "CuaAbelles"
+	cuaMissatgesAbelles = "CuaIntercomunicatsAbelles"
+	menjant             = "Estic menjant"
+	dormint             = "He acabat de menjar"
+	potPle              = "El pot está ple!"
+	cuaPot              = "Pot"
+	desperta            = "Ves a menjar"
+	melPosada           = "Mel afegida"
+)
+
+var (
+	wait sync.WaitGroup
+	mel  = os.Args[1]
 )
 
 func failOnError(err error, msg string) {
@@ -25,26 +33,23 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func conectar() *amqp.Connection {
-	//conexion con el servidor de RabbitMQ
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+func main() {
+	wait.Add(1)
+	menjades := make(chan int)
+	connexio, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
-	defer conn.Close()
-	return conn
-}
+	defer connexio.Close()
 
-func abrirCanal(conn *amqp.Connection) *amqp.Channel {
-	//creacion de un canal
-	ch, err := conn.Channel()
+	canalAbellaAvis, err := connexio.Channel()
 	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
-	return ch
-}
+	defer canalAbellaAvis.Close()
 
-func enviarMel(conn *amqp.Connection, ch *amqp.Channel) {
+	canalAbellaRebuts, err := connexio.Channel()
+	failOnError(err, "Failed to open a channel")
+	defer canalAbellaRebuts.Close()
 
 	//envio de cosas
-	q, err := ch.QueueDeclare(
+	cuaAvisos, err := canalAbellaAvis.QueueDeclare(
 		cuaAbelles, // name
 		false,      // durable
 		false,      // delete when unused
@@ -54,34 +59,85 @@ func enviarMel(conn *amqp.Connection, ch *amqp.Channel) {
 	)
 	failOnError(err, "Failed to declare a queue")
 
-	err = ch.Publish(
-		"",     // exchange
-		q.Name, // routing key
-		false,  // mandatory
-		false,  // immediate
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte("Aquesta es l'abella " + os.Args[1]),
-		})
-	failOnError(err, "Failed to publish a message")
+	cuaRebutsAbella, err := canalAbellaRebuts.QueueDeclare(
+		cuaMissatgesAbelles, // name
+		false,               // durable
+		false,               // delete when unused
+		false,               // exclusive
+		false,               // no-wait
+		nil,                 // arguments
+	)
+	failOnError(err, "Failed to declare a queue")
+
+	fmt.Println("Aquesta es l'abella " + os.Args[1])
+	//Obrim canal d'avisos entre abelles
+	interAvis, err := canalAbellaRebuts.Consume(
+		cuaRebutsAbella.Name,
+		"",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	failOnError(err, "Failed to declare a queue")
+
+	go func() {
+		for d := range interAvis {
+			if string(d.Body) == mel {
+				time.Sleep(1 * time.Second) //Esperar la abeja
+				esperar := true
+				for esperar {
+					for k := range interAvis {
+						if string(k.Body) == melPosada {
+							esperar = false
+						}
+					}
+				}
+
+			}
+		}
+		fmt.Println("d")
+		wait.Done()
+	}()
+
 	for i := 0; i < MAX_PRODUCCIO; i++ {
-		body := fmt.Sprintf("L'abella "+os.Args[1]+" produeix mel %d", i)
-		err = ch.Publish(
-			"",     // exchange
-			q.Name, // routing key
-			false,  // mandatory
-			true,   // immediate->si no ho pot consumir ningú, no es publica (consumer not ready)
+
+		wait.Wait()
+		infoAbella := fmt.Sprintf("L'abella "+os.Args[1]+" produeix mel %d", i)
+		fmt.Println(infoAbella)
+		body := mel
+		err = canalAbellaAvis.Publish(
+			"",             // exchange
+			cuaAvisos.Name, // routing key
+			false,          // mandatory
+			false,          // immediate->si no ho pot consumir ningú, no es publica (consumer not ready)
+			amqp.Publishing{
+				ContentType: "text/plain",
+				Body:        []byte(body),
+			})
+		failOnError(err, "Failed to publish a message")
+
+		time.Sleep(time.Duration(1) * time.Second)
+
+		body = melPosada
+		err = canalAbellaAvis.Publish(
+			"",             // exchange
+			cuaAvisos.Name, // routing key
+			false,          // mandatory
+			false,          // immediate->si no ho pot consumir ningú, no es publica (consumer not ready)
 			amqp.Publishing{
 				ContentType: "text/plain",
 				Body:        []byte(body),
 			})
 		failOnError(err, "Failed to publish a message")
 	}
-}
 
-func observarOs(conn *amqp.Connection, menjades chan int, ch *amqp.Channel, canal *amqp.Channel) {
-	//recibir
-	q, err := ch.QueueDeclare(
+	canalOs, err := connexio.Channel()
+	failOnError(err, "Failed to open a channel")
+	defer canalOs.Close()
+	//recibir avisos
+	cuaRebuts, err := canalOs.QueueDeclare(
 		cuaOs, // name
 		false, // durable
 		false, // delete when unused
@@ -91,7 +147,7 @@ func observarOs(conn *amqp.Connection, menjades chan int, ch *amqp.Channel, cana
 	)
 	failOnError(err, "Failed to declare a queue")
 
-	qPot, err := ch.QueueDeclare(
+	cuaPotMel, err := canalOs.QueueDeclare(
 		cuaPot,
 		false,
 		false,
@@ -101,25 +157,25 @@ func observarOs(conn *amqp.Connection, menjades chan int, ch *amqp.Channel, cana
 	)
 	failOnError(err, "Failed to declare a queue")
 
-	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		true,   // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
+	msgs, err := canalOs.Consume(
+		cuaRebuts.Name, // queue
+		"",             // consumer
+		true,           // auto-ack
+		false,          // exclusive
+		false,          // no-local
+		false,          // no-wait
+		nil,            // args
 	)
 	failOnError(err, "Failed to register a consumer")
 
-	msgPot, err := ch.Consume(
-		qPot.Name, // queue
-		"",        // consumer
-		true,      // auto-ack
-		false,     // exclusive
-		false,     // no-local
-		false,     // no-wait
-		nil,       // args
+	msgPot, err := canalOs.Consume(
+		cuaPotMel.Name, // queue
+		"",             // consumer
+		true,           // auto-ack
+		false,          // exclusive
+		false,          // no-local
+		false,          // no-wait
+		nil,            // args
 	)
 	failOnError(err, "Failed to register a consumer")
 
@@ -135,11 +191,11 @@ func observarOs(conn *amqp.Connection, menjades chan int, ch *amqp.Channel, cana
 	go func() {
 		for d := range msgPot {
 			if string(d.Body) == potPle {
-				canal.Publish(
+				canalOs.Publish(
 					"",         // exchange
 					cuaAbelles, // routing key
 					false,      // mandatory
-					true,       // immediate->si no ho pot consumir ningú, no es publica (consumer not ready)
+					false,      // immediate->si no ho pot consumir ningú, no es publica (consumer not ready)
 					amqp.Publishing{
 						ContentType: "text/plain",
 						Body:        []byte(desperta),
@@ -154,18 +210,12 @@ func observarOs(conn *amqp.Connection, menjades chan int, ch *amqp.Channel, cana
 	}()*/
 
 	log.Printf(" [*] Esperant que l'ós acabi de menjar.\nTo exit press CTRL+C")
-}
 
-func main() {
-	menjades := make(chan int)
-	connexio := conectar()
-	canalAbeja := abrirCanal(connexio)
-	go enviarMel(connexio, canalAbeja)
-	go observarOs(connexio, menjades, abrirCanal(connexio), canalAbeja)
 	go func() {
 		if <-menjades == 3 {
 			log.Printf("L'abella " + os.Args[1] + " s'en va")
 			defer connexio.Close()
 		}
 	}()
+
 }
