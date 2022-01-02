@@ -13,6 +13,7 @@ const (
 	colaBote    = "Cola_Bote"
 	colaAbeja   = "Cola_Abeja"
 	colaOso     = "Cola_Oso"
+	roto        = "Bote roto"
 )
 
 type contadorSeguro struct {
@@ -88,7 +89,6 @@ func main() {
 					ContentType: "text/plain",
 					Body:        []byte(aviso.Body),
 				})
-			log.Println("He enviado un mensaje")
 			nivelMiel.m.Lock()
 			nivelMiel.n++
 			nivelMiel.m.Unlock()
@@ -107,6 +107,15 @@ func main() {
 			nivelMiel.m.Unlock()
 		}
 		log.Println("Se ha roto el bote")
+		err = canalBote.Publish(
+			"",            // exchange
+			colaBote.Name, // routing key
+			false,         // mandatory
+			false,         // immediate
+			amqp.Publishing{
+				ContentType: "text/plain",
+				Body:        []byte(roto),
+			})
 		boteLleno <- true
 	}()
 	<-boteLleno
