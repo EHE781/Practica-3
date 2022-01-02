@@ -4,6 +4,7 @@ import (
 	amqp "amqp"
 	"fmt"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -80,6 +81,8 @@ func main() {
 	//Publicamos quién va  aponer miel y esperamos 1 segundo
 	go func() {
 		for aviso := range avisosAbejas {
+			nivelMiel.m.Lock()
+			enviar := string(aviso.Body) + " " + strconv.Itoa(nivelMiel.n+1)
 			err = canalBote.Publish(
 				"",            // exchange
 				colaBote.Name, // routing key
@@ -87,12 +90,12 @@ func main() {
 				false,         // immediate
 				amqp.Publishing{
 					ContentType: "text/plain",
-					Body:        []byte(aviso.Body),
+					Body:        []byte(enviar),
 				})
-			nivelMiel.m.Lock()
+
 			nivelMiel.n++
 			nivelMiel.m.Unlock()
-			time.Sleep(time.Second * 1)
+			time.Sleep(time.Second * 5)
 		}
 	}()
 
