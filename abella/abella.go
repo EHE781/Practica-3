@@ -6,11 +6,12 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 )
 
 const (
-	MAX_TRABAJO = 11
+	MAX_TRABAJO = 10
 	colaBote    = "Cola_Bote"
 	colaAbeja   = "Cola_Abeja"
 	colaOso     = "Cola_Oso"
@@ -33,6 +34,7 @@ func main() {
 	if len(os.Args) == 2 {
 		//Mensaje de quien eres
 		fmt.Println("Hola, soy la abeja " + os.Args[1])
+		textoRecibido := ""
 		//Mandar mensaje que quieres ir a llenar al pot
 		conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 		failOnError(err, "Failed to connect to RabbitMQ")
@@ -79,7 +81,9 @@ func main() {
 
 		go func() {
 			for mensaje := range mensajesBote {
-				if string(mensaje.Body) == os.Args[1] {
+				//El bote envia nuestro nombre y la iteracion, contiene nuestro nombre?
+				if strings.Contains(string((mensaje.Body)), os.Args[1]) {
+					textoRecibido = string(mensaje.Body)
 					esperar.Done()
 				}
 				//if string(mensaje.Body) == roto {
@@ -88,7 +92,7 @@ func main() {
 			}
 		}()
 		//Empezar a llenar de miel 10 veces (spoiler: for con wait (paquete sync))
-		for i := 0; i < MAX_TRABAJO; i++ {
+		for !canalBote.IsClosed() {
 			esperar.Add(1)
 			log.Println(os.Args[1] + " quiere poner miel...")
 			err = canalAbeja.Publish(
@@ -103,7 +107,11 @@ func main() {
 			failOnError(err, "Failed to publish a message")
 			//Si ha sido la primera, la cola la tiene como primera y le daremos permiso desde el bote antes
 			esperar.Wait()
-			log.Println(os.Args[1] + " pone miel en el bote.")
+			log.Println(os.Args[1] + " pone miel en el bote -> [" + textoRecibido + "]")
+			if strings.Contains(textoRecibido, "10") {
+				//despertar al oso de mierda
+				log.Println("Voy a pinchar al oso...")
+			}
 			//Avisar al bote que ha pasado
 
 		}
