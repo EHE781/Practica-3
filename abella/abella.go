@@ -1,22 +1,25 @@
 package main
 
 import (
+	amqp "amqp"
 	"fmt"
 	"log"
 	"os"
-
-	amqp "amqp"
+	"strconv"
+	"strings"
+	"sync"
 )
 
 const (
-	MAX_PRODUCCIO = 10
-	cuaOs         = "EstatOs"
-	cuaAbelles    = "CuaAbelles"
-	menjant       = "Estic menjant"
-	dormint       = "He acabat de menjar"
-	potPle        = "El pot está ple!"
-	cuaPot        = "Pot"
-	desperta      = "Ves a menjar"
+	colaAbejas    = "Cola_Abejas"
+	colaAbeja     = "Cola_Abeja_"
+	roto          = "Bote roto"
+	mensajeOso    = "El oso esta comiendo, le ha despertado "
+	colaDespertar = "Despertar"
+)
+
+var (
+	esperar sync.WaitGroup
 )
 
 func failOnError(err error, msg string) {
@@ -25,147 +28,135 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func conectar() *amqp.Connection {
-	//conexion con el servidor de RabbitMQ
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
-	failOnError(err, "Failed to connect to RabbitMQ")
-	defer conn.Close()
-	return conn
-}
+func main() {
+	//Tomar el nombre de la abeja de os.Args[1]
+	if len(os.Args) == 2 {
+		iniciar := false
+		//Mensaje de quien eres
+		fmt.Println("Hola, soy la abeja " + os.Args[1])
+		textoRecibido := ""
+		//Mandar mensaje que quieres ir a llenar al pot
+		conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+		failOnError(err, "Failed to connect to RabbitMQ")
+		defer conn.Close()
 
-func abrirCanal(conn *amqp.Connection) *amqp.Channel {
-	//creacion de un canal
-	ch, err := conn.Channel()
-	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
-	return ch
-}
+		canal, err := conn.Channel()
+		failOnError(err, "Failed to open a channel")
+		defer canal.Close()
 
-func enviarMel(conn *amqp.Connection, ch *amqp.Channel) {
+		colaAbejas, err := canal.QueueDeclare(
+			colaAbejas, // name
+			false,      // durable
+			false,      // delete when unused
+			false,      // exclusive
+			false,      // no-wait
+			nil,        // arguments
+		)
+		failOnError(err, "Failed to declare a queue")
 
-	//envio de cosas
-	q, err := ch.QueueDeclare(
-		cuaAbelles, // name
-		false,      // durable
-		false,      // delete when unused
-		false,      // exclusive
-		false,      // no-wait
-		nil,        // arguments
-	)
-	failOnError(err, "Failed to declare a queue")
+		colaPropia, err := canal.QueueDeclare(
+			colaAbeja+os.Args[1], // name
+			false,                // durable
+			false,                // delete when unused
+			false,                // exclusive
+			false,                // no-wait
+			nil,                  // arguments
+		)
+		failOnError(err, "Failed to declare a queue")
 
-	err = ch.Publish(
-		"",     // exchange
-		q.Name, // routing key
-		false,  // mandatory
-		false,  // immediate
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte("Aquesta es l'abella " + os.Args[1]),
-		})
-	failOnError(err, "Failed to publish a message")
-	for i := 0; i < MAX_PRODUCCIO; i++ {
-		body := fmt.Sprintf("L'abella "+os.Args[1]+" produeix mel %d", i)
-		err = ch.Publish(
-			"",     // exchange
-			q.Name, // routing key
-			false,  // mandatory
-			true,   // immediate->si no ho pot consumir ningú, no es publica (consumer not ready)
-			amqp.Publishing{
-				ContentType: "text/plain",
-				Body:        []byte(body),
-			})
-		failOnError(err, "Failed to publish a message")
-	}
-}
+		colaDespertar, err := canal.QueueDeclare(
+			colaDespertar, // name
+			false,         // durable
+			false,         // delete when unused
+			false,         // exclusive
+			false,         // no-wait
+			nil,           // arguments
+		)
+		failOnError(err, "Failed to declare queue")
 
-func observarOs(conn *amqp.Connection, menjades chan int, ch *amqp.Channel, canal *amqp.Channel) {
-	//recibir
-	q, err := ch.QueueDeclare(
-		cuaOs, // name
-		false, // durable
-		false, // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
-	)
-	failOnError(err, "Failed to declare a queue")
+		err = canal.ExchangeDeclare(
+			"fin",    // name
+			"fanout", // type
+			true,     // durable
+			false,    // auto-deleted
+			false,    // internal
+			false,    // no-wait
+			nil,      // arguments
+		)
+		failOnError(err, "Failed to declare queue")
 
-	qPot, err := ch.QueueDeclare(
-		cuaPot,
-		false,
-		false,
-		false,
-		false,
-		nil,
-	)
-	failOnError(err, "Failed to declare a queue")
+		err = canal.QueueBind(
+			colaAbeja+os.Args[1], // queue name
+			"",                   // routing key
+			"fin",                // exchange
+			false,
+			nil,
+		)
+		failOnError(err, "Failed to declare queue")
 
-	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		true,   // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
-	)
-	failOnError(err, "Failed to register a consumer")
+		mensajesOso, err := canal.Consume(
+			colaPropia.Name, // queue
+			"",              // consumer
+			true,            // auto-ack
+			false,           // exclusive
+			false,           // no-local
+			false,           // no-wait
+			nil,             // args
+		)
+		failOnError(err, "Failed to register a consumer")
 
-	msgPot, err := ch.Consume(
-		qPot.Name, // queue
-		"",        // consumer
-		true,      // auto-ack
-		false,     // exclusive
-		false,     // no-local
-		false,     // no-wait
-		nil,       // args
-	)
-	failOnError(err, "Failed to register a consumer")
-
-	go func() {
-		for d := range msgs {
-			if string(d.Body) == menjant {
-				//Afegim a menjades les actuals + 1, ja que l'ós está menjant
-				menjades <- (<-menjades + 1)
+		go func() {
+			for mensaje := range mensajesOso {
+				textoRecibido = string(mensaje.Body)
+				//El bote envia nuestro nombre y la iteracion, contiene nuestro nombre?
+				if strings.Contains(textoRecibido, os.Args[1]) && iniciar {
+					esperar.Done()
+				}
+				if string(mensaje.Body) == roto {
+					canal.Close()
+					esperar.Done()
+				}
 			}
-		}
-	}()
+		}()
+		//Empezar a llenar de miel 10 veces (spoiler: for con wait (paquete sync))
+		for !canal.IsClosed() {
+			iniciar = true
+			esperar.Add(1)
+			log.Println(os.Args[1] + " quiere poner miel...")
+			err = canal.Publish(
+				"",              // exchange
+				colaAbejas.Name, // routing key
+				false,           // mandatory
+				false,           // immediate
+				amqp.Publishing{
+					ContentType: "text/plain",
+					Body:        []byte(os.Args[1]),
+				})
+			failOnError(err, "Failed to publish a message")
+			//Si ha sido la primera, la cola la tiene como primera y le daremos permiso desde el bote antes
+			esperar.Wait()
+			log.Println(os.Args[1] + " pone miel en el bote -> [" + textoRecibido + "]")
+			if strings.Contains(textoRecibido, "10") {
+				//despertar al oso
 
-	go func() {
-		for d := range msgPot {
-			if string(d.Body) == potPle {
 				canal.Publish(
-					"",         // exchange
-					cuaAbelles, // routing key
-					false,      // mandatory
-					true,       // immediate->si no ho pot consumir ningú, no es publica (consumer not ready)
+					"",                 // exchange
+					colaDespertar.Name, // routing key
+					false,              // mandatory
+					false,              // immediate
 					amqp.Publishing{
 						ContentType: "text/plain",
-						Body:        []byte(desperta),
+						Body:        []byte(os.Args[1]),
 					})
 			}
-		}
-	}()
-	/*go func() {
-		for d := range msgs {
-			log.Printf("Received a message: %s", d.Body)
-		}
-	}()*/
+			//Avisar al bote que ha pasado
 
-	log.Printf(" [*] Esperant que l'ós acabi de menjar.\nTo exit press CTRL+C")
-}
-
-func main() {
-	menjades := make(chan int)
-	connexio := conectar()
-	canalAbeja := abrirCanal(connexio)
-	go enviarMel(connexio, canalAbeja)
-	go observarOs(connexio, menjades, abrirCanal(connexio), canalAbeja)
-	go func() {
-		if <-menjades == 3 {
-			log.Printf("L'abella " + os.Args[1] + " s'en va")
-			defer connexio.Close()
 		}
-	}()
+		log.Println(os.Args[1] + " ha acabado y se va.")
+		//Si detectas que el pot esta lleno despiertas al oso aun no fet
+		//Te vas del pot
+	} else {
+		fmt.Printf("Los argumentos han fallado! -> [" + strconv.Itoa(len(os.Args)) + "]")
+
+	}
 }

@@ -1,9 +1,13 @@
 @echo off
 
-set abelles=Maya Reina Pana Willy Jota Zeta Alpha Omega Jane Monsa
+:: Willy Jota Zeta Alpha Omega Jane Monsa
+
+set abelles=Maya Reina Pana
+
+::START/B go run pot/bote.go
 
 FOR %%A IN (%abelles%) DO (
-  go run send.go %%A
+  START go run abella/abella.go %%A
 )
 
 
