@@ -7,5 +7,6 @@ La idea de esta solución es que una abeja se inicializa con una cola propia par
 * Para ejecutar, en la consola:
 * ```go run abella/abella.go "nombre"``` para iniciar una abeja
 * ```go run os/oso.go``` para iniciar el oso
+* ```execucio.bat``` para iniciar *n* abejas (añadir nombres de abejas a la lista para más abejas)
 
 *Los demas archivos son ejemplos de Internet sobre RabbitMQ con AMQL, ignorar.*
