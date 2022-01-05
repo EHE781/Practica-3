@@ -1,13 +1,20 @@
 @echo off
 
-:: Willy Jota Zeta Alpha Omega Jane Monsa
+::Lista de nombres de las abejas (determina cuantas abejas se inician)
 
-set abelles=Maya Reina Pana
+set abelles=Maya Reina Pana Willy Jota Zeta Alpha Omega Jane
 
-::START/B go run pot/bote.go
+::set muchas=Carina Booker Jocelynn Ibarra Molly Lester Estrella Farmer Alejandra Mcpherson Gael Mclean Cristian Hartman Lyric Mcbride Antoine Burgess Zack Vasquez Priscilla Spears Naima Mathis Mary Steele Katrina Hartman Jayson Kramer Rachael Gentry Aisha Mcmahon Braelyn Munoz Noelle Tran Keyla Keller Anna Durham Deegan Clayton Morgan Lane Belinda Ewing Dangelo Rojas Danielle Mathews Dixie Newton Roger Castro Damarion Deleon Krish Hooper Jordyn Valencia Delaney Carpenter Hailey Durham
+
+::Ejecución con una terminal universal (todos los prints en la misma, pueden haber errores visuales):
 
 FOR %%A IN (%abelles%) DO (
-  START go run abella/abella.go %%A
+  START/B go run abella/abella.go %%A
 )
 
+::Ejecución con una terminal por cada abeja:
+
+::FOR %%A IN (%abelles%) DO (
+  ::START/B go run abella/abella.go %%A
+::)
 
