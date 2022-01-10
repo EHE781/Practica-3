@@ -153,4 +153,6 @@ func main() {
 		boteLleno <- true
 	}()
 	<-boteLleno
+	canal.QueueDelete(colaAbejas.Name, false, false, false)
+	canal.QueueDelete(colaDespertar.Name, false, false, false)
 }

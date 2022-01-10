@@ -113,6 +113,7 @@ func main() {
 					esperar.Done()
 				}
 				if string(mensaje.Body) == roto {
+					canal.QueueDelete((colaAbeja + os.Args[1]), false, false, false)
 					canal.Close()
 					esperar.Done()
 				}
@@ -153,6 +154,7 @@ func main() {
 
 		}
 		log.Println(os.Args[1] + " ha acabado y se va.")
+
 		//Si detectas que el pot esta lleno despiertas al oso aun no fet
 		//Te vas del pot
 	} else {
