@@ -16,6 +16,7 @@ const (
 	mensajeOso    = "El oso esta comiendo, le ha despertado "
 	colaDespertar = "Despertar"
 	colaPermisos  = "Cola_Permisos"
+	MAX_NIVEL     = "10"
 )
 
 var (
@@ -103,35 +104,38 @@ func main() {
 		for !canal.IsClosed() {
 			iniciar = true
 			esperar.Add(1)
-			log.Println(os.Args[1] + " quiere poner miel...")
-			err = canal.Publish(
-				"",              // exchange
-				colaAbejas.Name, // routing key
-				false,           // mandatory
-				false,           // immediate
-				amqp.Publishing{
-					ContentType: "text/plain",
-					Body:        []byte(os.Args[1]),
-				})
-			failOnError(err, "Failed to publish a message")
-			//Si ha sido la primera, la cola la tiene como primera y le daremos permiso desde el bote antes
-			esperar.Wait()
-			log.Println(os.Args[1] + " pone miel en el bote -> [" + textoRecibido + "]")
-			if strings.Contains(textoRecibido, "10") {
-				//despertar al oso
-
-				canal.Publish(
-					"",                 // exchange
-					colaDespertar.Name, // routing key
-					false,              // mandatory
-					false,              // immediate
+			if !canal.IsClosed() {
+				log.Println(os.Args[1] + " quiere poner miel...")
+				err = canal.Publish(
+					"",              // exchange
+					colaAbejas.Name, // routing key
+					false,           // mandatory
+					false,           // immediate
 					amqp.Publishing{
 						ContentType: "text/plain",
 						Body:        []byte(os.Args[1]),
 					})
+				failOnError(err, "Failed to publish a message")
+				//Si ha sido la primera, la cola la tiene como primera y le daremos permiso desde el bote antes
 			}
-			//Avisar al bote que ha pasado
+			esperar.Wait()
+			if !canal.IsClosed() {
+				log.Println(os.Args[1] + " pone miel en el bote -> [" + textoRecibido + "]")
+				if strings.Contains(textoRecibido, MAX_NIVEL) {
+					//despertar al oso
 
+					canal.Publish(
+						"",                 // exchange
+						colaDespertar.Name, // routing key
+						false,              // mandatory
+						false,              // immediate
+						amqp.Publishing{
+							ContentType: "text/plain",
+							Body:        []byte(os.Args[1]),
+						})
+				}
+				//Avisar al bote que ha pasado
+			}
 		}
 		log.Println(os.Args[1] + " ha acabado y se va.")
 

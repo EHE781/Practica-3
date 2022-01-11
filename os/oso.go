@@ -154,5 +154,13 @@ func main() {
 	<-boteLleno
 	canal.QueueDelete(colaAbejas.Name, false, false, false)
 	canal.QueueDelete(colaDespertar.Name, false, false, false)
-	canal.QueueDelete(colaPermisos.Name, false, false, false)
+	finSimulacion := make(chan bool)
+	go func() {
+		time.Sleep(time.Duration(time.Second) * 5) //Damos 5 segundos a las abejas para leer el mensaje de "exit"
+		//Las abejas que no lo lean en 5 segundos (caso muchas abejas) acabarán con un error
+		canal.QueueDelete(colaPermisos.Name, false, false, false)
+		finSimulacion <- true
+
+	}()
+	<-finSimulacion
 }
