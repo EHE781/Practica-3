@@ -12,10 +12,10 @@ import (
 
 const (
 	colaAbejas    = "Cola_Abejas"
-	colaAbeja     = "Cola_Abeja_"
 	roto          = "Bote roto"
 	mensajeOso    = "El oso esta comiendo, le ha despertado "
 	colaDespertar = "Despertar"
+	colaPermisos  = "Cola_Permisos"
 )
 
 var (
@@ -54,13 +54,13 @@ func main() {
 		)
 		failOnError(err, "Failed to declare a queue")
 
-		colaPropia, err := canal.QueueDeclare(
-			colaAbeja+os.Args[1], // name
-			false,                // durable
-			false,                // delete when unused
-			false,                // exclusive
-			false,                // no-wait
-			nil,                  // arguments
+		colaPermisos, err := canal.QueueDeclare(
+			colaPermisos, // name
+			false,        // durable
+			false,        // delete when unused
+			false,        // exclusive
+			false,        // no-wait
+			nil,          // arguments
 		)
 		failOnError(err, "Failed to declare a queue")
 
@@ -74,34 +74,14 @@ func main() {
 		)
 		failOnError(err, "Failed to declare queue")
 
-		err = canal.ExchangeDeclare(
-			"fin",    // name
-			"fanout", // type
-			true,     // durable
-			false,    // auto-deleted
-			false,    // internal
-			false,    // no-wait
-			nil,      // arguments
-		)
-		failOnError(err, "Failed to declare queue")
-
-		err = canal.QueueBind(
-			colaAbeja+os.Args[1], // queue name
-			"",                   // routing key
-			"fin",                // exchange
-			false,
-			nil,
-		)
-		failOnError(err, "Failed to declare queue")
-
 		mensajesOso, err := canal.Consume(
-			colaPropia.Name, // queue
-			"",              // consumer
-			true,            // auto-ack
-			false,           // exclusive
-			false,           // no-local
-			false,           // no-wait
-			nil,             // args
+			colaPermisos.Name, // queue
+			"",                // consumer
+			false,             // auto-ack
+			false,             // exclusive
+			false,             // no-local
+			false,             // no-wait
+			nil,               // args
 		)
 		failOnError(err, "Failed to register a consumer")
 
@@ -111,9 +91,9 @@ func main() {
 				//El bote envia nuestro nombre y la iteracion, contiene nuestro nombre?
 				if strings.Contains(textoRecibido, os.Args[1]) && iniciar {
 					esperar.Done()
+					mensaje.Ack(true)
 				}
 				if string(mensaje.Body) == roto {
-					canal.QueueDelete((colaAbeja + os.Args[1]), false, false, false)
 					canal.Close()
 					esperar.Done()
 				}

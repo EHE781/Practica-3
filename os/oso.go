@@ -13,10 +13,10 @@ const (
 	MAX_RELLENO   = 3
 	MAX_NIVEL     = 10
 	colaAbejas    = "Cola_Abejas"
-	colaAbeja     = "Cola_Abeja_"
 	roto          = "Bote roto"
 	mensajeOso    = "Estoy comiendo"
 	colaDespertar = "Despertar"
+	colaPermisos  = "Cola_Permisos"
 )
 
 type contadorSeguro struct {
@@ -66,16 +66,15 @@ func main() {
 	)
 	failOnError(err, "Failed to declare a queue")
 
-	err = canal.ExchangeDeclare(
-		"fin",    // name
-		"fanout", // type
-		true,     // durable
-		false,    // auto-deleted
-		false,    // internal
-		false,    // no-wait
-		nil,      // arguments
+	colaPermisos, err := canal.QueueDeclare(
+		colaPermisos, // name
+		false,        // durable
+		false,        // delete when unused
+		false,        // exclusive
+		false,        // no-wait
+		nil,          // arguments
 	)
-	failOnError(err, "Failed to declare an exchange")
+	failOnError(err, "Failed to declare a queue")
 
 	avisosAbejas, err := canal.Consume(
 		colaAbejas.Name, // queue
@@ -105,10 +104,10 @@ func main() {
 			nivelMiel.m.Lock()
 			enviar := string(aviso.Body) + " " + strconv.Itoa(nivelMiel.n+1)
 			err = canal.Publish(
-				"",                           // exchange
-				colaAbeja+string(aviso.Body), // routing key
-				false,                        // mandatory
-				false,                        // immediate
+				"",                // exchange
+				colaPermisos.Name, // routing key
+				false,             // mandatory
+				false,             // immediate
 				amqp.Publishing{
 					ContentType: "text/plain",
 					Body:        []byte(enviar),
@@ -142,10 +141,10 @@ func main() {
 		}
 		log.Println("Se ha roto el bote")
 		err = canal.Publish(
-			"fin", // exchange
-			"",    // routing key
-			false, // mandatory
-			false, // immediate
+			"",                // exchange
+			colaPermisos.Name, // routing key
+			false,             // mandatory
+			false,             // immediate
 			amqp.Publishing{
 				ContentType: "text/plain",
 				Body:        []byte(roto),
@@ -155,4 +154,5 @@ func main() {
 	<-boteLleno
 	canal.QueueDelete(colaAbejas.Name, false, false, false)
 	canal.QueueDelete(colaDespertar.Name, false, false, false)
+	canal.QueueDelete(colaPermisos.Name, false, false, false)
 }
