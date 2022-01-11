@@ -1,12 +1,12 @@
-Simulación de comunicación entre procesos mediante el servidor RabbitMQ
+Solución alternativa al repositorio principal.
 
-Se trata de simular la comunicación entre un oso y *"n"* abejas. Las abejas van llenando un bote de miel hasta un M de veces concurrentemente, haciendo uso de las colas de RabbitMQ. Una vez puestas las porciones, la abeja que pone la que es el número *M* despierta al oso para que coma. El oso va a comer de este avisando a todas las abejas de que dejen de ir al mismo mientras él está ahí. Una vez el oso vuelve a dormirse, las abejas reanundan su trabajo. El bote de miel puede ser rellenado una cantidad *K*, después de la cual se rompe para finalizar la simulación.
+Solamente queda adaptar el proceso `abeja.go` para que se adapte.
 
-La idea de esta solución es que una abeja se inicializa con una cola propia para recibir los avisos del oso, ya que necesitamos avisar a todas las abejas cuando va a comer, y esta cola la adjuntamos a un exchange de fanout de RabbitMQ. Así cuando con el oso vayamos a comer, ponemos un mensaje en este exchange y todas las abejas lo recibirán para realizar la espera. Luego dispondrá de otra cola que será compartida por todas las abejas en donde solicitan un permiso para ir a poner miel y esperan hasta que les es concedido. Una abeja para saber si es su turno consume mensajes de su cola propia. La clase oso por el otro lado también implementa la función de bote. Cuando recibe un nombre de abeja en la cola compartida por las abejas, da permiso a cada mensaje que consume. Como obtenemos el nombre de la abeja, y la cola de una abeja tiene el formato ```"Cola_Abeja_"+os.Args[1]```, lo usamos para enviar el mensaje a la cola pertinente que hay que darle permiso, así como cual es la porción de miel que está poniendo (para impresión). Cuando se llena el bote, el oso simplemente deja de dar permisos durante un tiempo *t* a las abejas, simulando que estas están esperando que coma. Al acabar de comer del bote y estar en la iteración K (máximos rellenos alcanzados), el oso envía un mensaje al fanout exchange de que el bote se ha roto y acaba su ejecución. Todas las abejas al recibir este mensaje finalizan también sus ejecuciones.
+Consiste en solamente 3 colas en total, y la abeja acaba al recibir un mensaje de bote roto.
+Los demás mensajes (para permisos) se consumen solamente por la abeja a la que le es dado el permiso, siendo este un mensaje el cual al abeja pertinente le da un acknowledge manual (en la solución principal es automático).
 
-* Para ejecutar, en la consola:
-* ```go run abella/abella.go "nombre"``` para iniciar una abeja
-* ```go run os/oso.go``` para iniciar el oso
-* ```execucio.bat``` para iniciar *n* abejas (añadir nombres de abejas a la lista para más abejas)
+TODO:
+    - Falta mejorar el código
+    - `abeja.go` no gestiona bien los mensajes y/o el `oso.go` tampoco ("porción 12" cuando el máximo es 10)
 
-*Los demas archivos son ejemplos de Internet sobre RabbitMQ con AMQL, ignorar.*
+Por lo demás todo bien.
