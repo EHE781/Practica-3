@@ -12,7 +12,7 @@ import (
 
 const (
 	colaAbejas    = "Cola_Abejas"
-	colaAbeja     = "Cola_Abeja_"
+	colaAbeja     = "Cola_Abeja_" //"Cola_Abeja_n"
 	roto          = "Bote roto"
 	mensajeOso    = "El oso esta comiendo, le ha despertado "
 	colaDespertar = "Despertar"
