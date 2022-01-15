@@ -113,6 +113,7 @@ func main() {
 					esperar.Done()
 				}
 				if string(mensaje.Body) == roto {
+					canal.QueueUnbind(colaAbeja+os.Args[1], "", "fin", nil)
 					canal.QueueDelete((colaAbeja + os.Args[1]), false, false, false)
 					canal.Close()
 					esperar.Done()

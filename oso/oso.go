@@ -76,6 +76,7 @@ func main() {
 		nil,      // arguments
 	)
 	failOnError(err, "Failed to declare an exchange")
+	defer canal.ExchangeDelete("fin", false, false)
 
 	avisosAbejas, err := canal.Consume(
 		colaAbejas.Name, // queue
@@ -153,6 +154,8 @@ func main() {
 		boteLleno <- true
 	}()
 	<-boteLleno
+	//Eliminamos las colas del oso y de la abeja
 	canal.QueueDelete(colaAbejas.Name, false, false, false)
 	canal.QueueDelete(colaDespertar.Name, false, false, false)
+
 }

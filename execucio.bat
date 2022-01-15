@@ -9,7 +9,7 @@ set abelles=Maya Reina Pana Willy Jota Zeta Alpha Omega Jane
 ::Ejecución con una terminal universal (todos los prints en la misma, pueden haber errores visuales):
 
 FOR %%A IN (%abelles%) DO (
-  START/B go run abella/abella.go %%A
+  START/B go run abeja/abeja.go %%A
 )
 
 ::Ejecución con una terminal por cada abeja:
